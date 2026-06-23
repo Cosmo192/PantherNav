@@ -14,9 +14,6 @@ importers:
       '@turf/helpers':
         specifier: ^7.2.0
         version: 7.3.5
-      leaflet:
-        specifier: ^1.9.4
-        version: 1.9.4
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@18.3.1)
@@ -29,13 +26,7 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
-      react-leaflet:
-        specifier: ^4.2.1
-        version: 4.2.1(leaflet@1.9.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
-      '@types/leaflet':
-        specifier: ^1.9.16
-        version: 1.9.21
       '@types/node':
         specifier: ^20.17.12
         version: 20.19.43

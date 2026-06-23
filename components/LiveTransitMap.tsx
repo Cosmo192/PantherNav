@@ -1,10 +1,9 @@
 "use client";
 
-import L from "leaflet";
-import { Bus, MapPin } from "lucide-react";
-import { MapContainer, Marker, Popup, TileLayer, CircleMarker } from "react-leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Stop, TransitSnapshot, Vehicle } from "@/lib/transit";
 import { GSU_CENTER, stopServesRoute } from "@/lib/transit";
+import { loadGoogleMaps } from "@/lib/googleMaps";
 
 type LiveTransitMapProps = {
   snapshot: TransitSnapshot | null;
@@ -12,113 +11,216 @@ type LiveTransitMapProps = {
   onStopSelect: (stop: Stop) => void;
 };
 
+const mapStyles = [
+  { elementType: "geometry", stylers: [{ color: "#111827" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#dbeafe" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#020617" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#334155" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#172033" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#bfdbfe" }] },
+  { featureType: "poi.school", elementType: "geometry", stylers: [{ color: "#10294a" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#243044" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#0f172a" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#e2e8f0" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#334155" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#1d4ed8" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#061426" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#7dd3fc" }] }
+];
+
 function routeColor(color?: string) {
   return color && /^#[0-9a-f]{6}$/i.test(color) ? color : "#003366";
 }
 
-function busIcon(vehicle: Vehicle) {
-  const html = `<div class="bus-marker" style="background:${routeColor(vehicle.color)}">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 6v6"/><path d="M16 6v6"/><path d="M6 18h.01"/><path d="M18 18h.01"/><path d="M6 2h12a2 2 0 0 1 2 2v13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V4a2 2 0 0 1 2-2Z"/><path d="M4 10h16"/><path d="m6 20-2 2"/><path d="m18 20 2 2"/>
+function busSvg(vehicle: Vehicle) {
+  const color = encodeURIComponent(routeColor(vehicle.color));
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 38 38">
+      <circle cx="19" cy="19" r="17" fill="${decodeURIComponent(color)}" stroke="white" stroke-width="3"/>
+      <path d="M12 9h14a3 3 0 0 1 3 3v12a4 4 0 0 1-4 4H13a4 4 0 0 1-4-4V12a3 3 0 0 1 3-3Z" fill="none" stroke="white" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M9 17h20M14 12v7M24 12v7" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="14" cy="25" r="1.7" fill="white"/>
+      <circle cx="24" cy="25" r="1.7" fill="white"/>
     </svg>
-  </div>`;
-
-  return L.divIcon({
-    className: "",
-    html,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -14]
-  });
+  `)}`;
 }
 
-function stopIcon() {
-  return L.divIcon({
-    className: "",
-    html: '<div class="stop-marker"></div>',
-    iconSize: [13, 13],
-    iconAnchor: [6, 6],
-    popupAnchor: [0, -6]
+function makeInfoContent(title: string, lines: string[], buttonText?: string) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "google-map-popup";
+
+  const heading = document.createElement("div");
+  heading.className = "google-map-popup-title";
+  heading.textContent = title;
+  wrapper.appendChild(heading);
+
+  lines.forEach((line) => {
+    const item = document.createElement("div");
+    item.className = "google-map-popup-line";
+    item.textContent = line;
+    wrapper.appendChild(item);
   });
+
+  if (buttonText) {
+    const button = document.createElement("button");
+    button.className = "google-map-popup-button";
+    button.type = "button";
+    button.textContent = buttonText;
+    wrapper.appendChild(button);
+  }
+
+  return wrapper;
 }
 
 export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect }: LiveTransitMapProps) {
-  const selectedRoute = snapshot?.routes.find((route) =>
-    [route.id, route.myid, route.groupId].filter(Boolean).includes(selectedRouteId ?? "")
+  const mapNodeRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const markerRefs = useRef<any[]>([]);
+  const infoWindowRef = useRef<any>(null);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "missing-key" | "error">("loading");
+
+  const selectedRoute = useMemo(
+    () => snapshot?.routes.find((route) => [route.id, route.myid, route.groupId].filter(Boolean).includes(selectedRouteId ?? "")),
+    [selectedRouteId, snapshot?.routes]
   );
 
-  const stops = selectedRoute
-    ? snapshot?.stops.filter((stop) => stopServesRoute(stop, selectedRoute)) ?? []
-    : snapshot?.stops ?? [];
+  const stops = useMemo(
+    () => (selectedRoute ? snapshot?.stops.filter((stop) => stopServesRoute(stop, selectedRoute)) ?? [] : snapshot?.stops ?? []),
+    [selectedRoute, snapshot?.stops]
+  );
 
-  const vehicles = selectedRouteId
-    ? snapshot?.vehicles.filter((vehicle) => vehicle.routeId === selectedRouteId) ?? []
-    : snapshot?.vehicles ?? [];
+  const vehicles = useMemo(
+    () => (selectedRouteId ? snapshot?.vehicles.filter((vehicle) => vehicle.routeId === selectedRouteId) ?? [] : snapshot?.vehicles ?? []),
+    [selectedRouteId, snapshot?.vehicles]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+
+    loadGoogleMaps().then((ready) => {
+      if (!mounted) return;
+
+      if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+        setLoadState("missing-key");
+        return;
+      }
+
+      if (!ready || !window.google?.maps || !mapNodeRef.current) {
+        setLoadState("error");
+        return;
+      }
+
+      if (!mapRef.current) {
+        mapRef.current = new window.google.maps.Map(mapNodeRef.current, {
+          center: GSU_CENTER,
+          zoom: 15,
+          clickableIcons: true,
+          disableDefaultUI: false,
+          fullscreenControl: false,
+          mapTypeControl: false,
+          streetViewControl: false,
+          styles: mapStyles
+        });
+        infoWindowRef.current = new window.google.maps.InfoWindow();
+      }
+
+      setLoadState("ready");
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const google = window.google;
+    if (loadState !== "ready" || !google?.maps || !mapRef.current) return;
+
+    markerRefs.current.forEach((marker) => marker.setMap(null));
+    markerRefs.current = [];
+
+    const campusMarker = new google.maps.Marker({
+      map: mapRef.current,
+      position: GSU_CENTER,
+      title: "Georgia State University",
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: "#CC0000",
+        fillOpacity: 1,
+        scale: 8,
+        strokeColor: "#ffffff",
+        strokeWeight: 2
+      }
+    });
+    markerRefs.current.push(campusMarker);
+
+    stops.forEach((stop) => {
+      const marker = new google.maps.Marker({
+        map: mapRef.current,
+        position: { lat: stop.latitude, lng: stop.longitude },
+        title: stop.name,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          fillColor: "#003366",
+          fillOpacity: 1,
+          scale: 6,
+          strokeColor: "#ffffff",
+          strokeWeight: 2
+        }
+      });
+
+      marker.addListener("click", () => {
+        const content = makeInfoContent(stop.name, ["Campus shuttle stop"], "Show arrivals");
+        content.querySelector("button")?.addEventListener("click", () => onStopSelect(stop));
+        infoWindowRef.current.setContent(content);
+        infoWindowRef.current.open({ anchor: marker, map: mapRef.current });
+      });
+
+      markerRefs.current.push(marker);
+    });
+
+    vehicles.forEach((vehicle) => {
+      const marker = new google.maps.Marker({
+        map: mapRef.current,
+        position: { lat: vehicle.latitude, lng: vehicle.longitude },
+        title: `${vehicle.name} - ${vehicle.routeName}`,
+        icon: {
+          url: busSvg(vehicle),
+          scaledSize: new google.maps.Size(38, 38),
+          anchor: new google.maps.Point(19, 19)
+        },
+        zIndex: 10
+      });
+
+      marker.addListener("click", () => {
+        infoWindowRef.current.setContent(
+          makeInfoContent(vehicle.name, [vehicle.routeName, `Heading ${Math.round(vehicle.calculatedCourse || 0)} deg`])
+        );
+        infoWindowRef.current.open({ anchor: marker, map: mapRef.current });
+      });
+
+      markerRefs.current.push(marker);
+    });
+
+    return () => {
+      markerRefs.current.forEach((marker) => marker.setMap(null));
+      markerRefs.current = [];
+    };
+  }, [loadState, onStopSelect, stops, vehicles]);
 
   return (
-    <div className="h-full min-h-[460px] overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow">
-      <MapContainer
-        center={[GSU_CENTER.lat, GSU_CENTER.lng]}
-        zoom={15}
-        scrollWheelZoom
-        className="h-full min-h-[460px]"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+    <div className="relative h-full min-h-[460px] overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow">
+      <div ref={mapNodeRef} className="google-map h-full min-h-[460px]" />
 
-        <CircleMarker
-          center={[GSU_CENTER.lat, GSU_CENTER.lng]}
-          radius={7}
-          pathOptions={{ color: "#CC0000", fillColor: "#CC0000", fillOpacity: 0.8 }}
-        >
-          <Popup>
-            <strong>Georgia State University</strong>
-          </Popup>
-        </CircleMarker>
-
-        {stops.map((stop) => (
-          <Marker
-            key={stop.id}
-            position={[stop.latitude, stop.longitude]}
-            icon={stopIcon()}
-            eventHandlers={{
-              click: () => onStopSelect(stop)
-            }}
-          >
-            <Popup>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-semibold">
-                  <MapPin size={14} />
-                  {stop.name}
-                </div>
-                <button
-                  className="rounded-md bg-gsu-blue px-3 py-1 text-xs font-semibold text-white"
-                  onClick={() => onStopSelect(stop)}
-                >
-                  Show arrivals
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {vehicles.map((vehicle) => (
-          <Marker key={vehicle.id} position={[vehicle.latitude, vehicle.longitude]} icon={busIcon(vehicle)}>
-            <Popup>
-              <div className="min-w-44 space-y-2">
-                <div className="flex items-center gap-2 font-semibold">
-                  <Bus size={14} />
-                  {vehicle.name}
-                </div>
-                <div className="text-sm text-slate-300">{vehicle.routeName}</div>
-                <div className="text-xs text-slate-400">Heading {Math.round(vehicle.calculatedCourse || 0)} deg</div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+      {loadState !== "ready" && (
+        <div className="absolute inset-0 grid place-items-center bg-gsu-panel px-6 text-center text-sm text-slate-300">
+          {loadState === "missing-key"
+            ? "Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local to load Google Maps."
+            : loadState === "error"
+              ? "Google Maps could not load. Check that Maps JavaScript API is enabled for your key."
+              : "Loading Google Maps"}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   Route as RouteIcon,
   Signpost,
 } from "lucide-react";
+import { gsuBounds, loadGoogleMaps } from "@/lib/googleMaps";
 import {
   buildGoogleSearchLink,
   buildGoogleWalkingLink,
@@ -61,32 +62,6 @@ function resolveChoice(value: string, stops: Stop[]): LocationChoice {
   return { label: value || "Georgia State University", coordinate: GSU_CENTER };
 }
 
-function loadGooglePlaces() {
-  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!key || typeof window === "undefined") return Promise.resolve(false);
-
-  const existing = (window as any).google?.maps?.places;
-  if (existing) return Promise.resolve(true);
-
-  return new Promise<boolean>((resolve) => {
-    const current = document.querySelector<HTMLScriptElement>("script[data-panthernav-google]");
-    if (current) {
-      current.addEventListener("load", () => resolve(true), { once: true });
-      current.addEventListener("error", () => resolve(false), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.panthernavGoogle = "true";
-    script.addEventListener("load", () => resolve(true), { once: true });
-    script.addEventListener("error", () => resolve(false), { once: true });
-    document.head.appendChild(script);
-  });
-}
-
 function PlaceInput({
   id,
   label,
@@ -111,16 +86,13 @@ function PlaceInput({
     let autocomplete: any;
     let listener: any;
 
-    loadGooglePlaces().then((ready) => {
+    loadGoogleMaps().then((ready) => {
       const google = (window as any).google;
       if (!ready || !inputRef.current || !google?.maps?.places) return;
 
       autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
         fields: ["name", "formatted_address", "geometry"],
-        bounds: new google.maps.LatLngBounds(
-          new google.maps.LatLng(GSU_CENTER.lat - 0.025, GSU_CENTER.lng - 0.025),
-          new google.maps.LatLng(GSU_CENTER.lat + 0.025, GSU_CENTER.lng + 0.025)
-        ),
+        bounds: gsuBounds(),
         strictBounds: false
       });
 
@@ -313,6 +285,10 @@ export default function PantherNavApp() {
   }, [customDestination, destination, snapshot?.stops]);
   const rankedRoutes = useMemo(() => findRankedRoutes(originChoice, destinationChoice, snapshot), [originChoice, destinationChoice, snapshot]);
   const selectedStop = snapshot?.stops.find((stop) => stop.id === selectedStopId) ?? snapshot?.stops[0];
+  const activeVehicles = useMemo(
+    () => [...(snapshot?.vehicles ?? [])].sort((a, b) => a.routeName.localeCompare(b.routeName) || a.name.localeCompare(b.name)),
+    [snapshot?.vehicles]
+  );
 
   const arrivals = useMemo(() => {
     if (!snapshot || !selectedStop) return [];
@@ -527,13 +503,73 @@ export default function PantherNavApp() {
                 GSU system 480
               </div>
             </div>
-            <LiveTransitMap
-              snapshot={snapshot}
-              onStopSelect={(stop) => {
-                setSelectedStopId(stop.id);
-                setActiveTab("arrivals");
-              }}
-            />
+            <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+              <LiveTransitMap
+                snapshot={snapshot}
+                onStopSelect={(stop) => {
+                  setSelectedStopId(stop.id);
+                  setActiveTab("arrivals");
+                }}
+              />
+
+              <aside className="rounded-lg border border-sky-300/15 bg-gsu-panel p-4 shadow-glow">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-white">Buses running now</h3>
+                    <p className="text-sm text-slate-400">
+                      {snapshot?.fetchedAt
+                        ? `Updated ${new Intl.DateTimeFormat("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            second: "2-digit"
+                          }).format(new Date(snapshot.fetchedAt))}`
+                        : "Waiting for live data"}
+                    </p>
+                  </div>
+                  <span className="rounded-md bg-gsu-red px-2 py-1 text-xs font-black text-white">{activeVehicles.length}</span>
+                </div>
+
+                <div className="grid max-h-[460px] gap-3 overflow-y-auto pr-1">
+                  {activeVehicles.map((vehicle) => (
+                    <article key={vehicle.id} className="rounded-lg border border-white/10 bg-black/24 p-3">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className="mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-lg text-white"
+                          style={{ backgroundColor: vehicle.color || "#003366" }}
+                        >
+                          <Bus size={18} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h4 className="truncate text-sm font-black text-white">{vehicle.name}</h4>
+                              <p className="truncate text-sm text-slate-400">{vehicle.routeName}</p>
+                            </div>
+                            {vehicle.speed != null && <span className="shrink-0 text-xs text-slate-500">{Math.round(vehicle.speed)} mph</span>}
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                            <div className="rounded-md bg-white/5 p-2">
+                              <span className="block text-slate-500">Heading</span>
+                              {Math.round(vehicle.calculatedCourse || 0)} deg
+                            </div>
+                            <div className="rounded-md bg-white/5 p-2">
+                              <span className="block text-slate-500">Load</span>
+                              {vehicle.paxLoad == null ? "Live" : `${vehicle.paxLoad}%`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+
+                  {!activeVehicles.length && (
+                    <div className="rounded-lg border border-sky-300/15 bg-black/24 p-4 text-sm text-slate-300">
+                      No buses are reporting live positions right now.
+                    </div>
+                  )}
+                </div>
+              </aside>
+            </div>
           </div>
         )}
 

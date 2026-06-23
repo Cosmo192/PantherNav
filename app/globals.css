@@ -26,47 +26,52 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
-.leaflet-container {
+.google-map {
   min-height: 100%;
   width: 100%;
   background: #08111f;
 }
 
-.leaflet-control-attribution {
-  background: rgba(5, 7, 11, 0.74) !important;
-  color: #cbd5e1 !important;
+.google-map-popup {
+  min-width: 180px;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-  background: #0a101b;
-  color: #f8fafc;
-  border: 1px solid rgba(56, 189, 248, 0.24);
+.google-map-popup-title {
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 800;
 }
 
-.leaflet-popup-content {
-  margin: 12px 14px;
+.google-map-popup-line {
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
-.bus-marker {
-  display: grid;
-  height: 30px;
-  width: 30px;
-  place-items: center;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
-}
-
-.stop-marker {
-  height: 13px;
-  width: 13px;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
+.google-map-popup-button {
+  margin-top: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
   background: #003366;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.gm-style .gm-ui-hover-effect {
+  opacity: 1 !important;
+}
+
+.gm-style .gm-ui-hover-effect span {
+  background-color: #0f172a !important;
 }
