@@ -21,6 +21,14 @@ PantherNav is a campus transit web app for Georgia State University. It shows ro
 - Google Places API
 - PassioGO transit data
 - TurfJS distance calculations
+- Vercel Analytics
+
+
+## Analytics
+
+Vercel Analytics is installed through `@vercel/analytics` and mounted in `app/layout.tsx`.
+
+Analytics data appears in the Vercel dashboard after the app is deployed on Vercel and receives traffic. You do not need a separate analytics environment variable for basic Vercel Analytics.
 
 
 ## How To Use
@@ -50,5 +58,4 @@ PantherNav is a campus transit web app for Georgia State University. It shows ro
 5. Use the Buses running now panel to see all active buses.
 
 The app refreshes live transit data about every 10 seconds.
-
 
