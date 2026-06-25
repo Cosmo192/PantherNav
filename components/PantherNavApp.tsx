@@ -246,8 +246,8 @@ export default function PantherNavApp() {
   const [snapshot, setSnapshot] = useState<TransitSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [origin, setOrigin] = useState("University Library");
-  const [destination, setDestination] = useState("Piedmont Central");
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
   const [selectedStopId, setSelectedStopId] = useState<string>("");
   const [currentLocation, setCurrentLocation] = useState<LocationChoice | null>(null);
   const [customOrigin, setCustomOrigin] = useState<LocationChoice | null>(null);
