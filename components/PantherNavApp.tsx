@@ -173,7 +173,7 @@ function RouteCard({ option }: { option: RouteOption }) {
         <div className="grid grid-cols-3 gap-2 text-xs text-slate-300">
           <div className="rounded-md bg-white/5 p-2">
             <span className="block text-slate-500">Walk</span>
-            {formatMiles(option.walkToStopMiles)}
+            {formatMiles(option.walkToStopMiles + option.walkFromStopMiles)}
           </div>
           <div className="rounded-md bg-white/5 p-2">
             <span className="block text-slate-500">Wait</span>
