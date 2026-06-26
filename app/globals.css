@@ -135,22 +135,26 @@ select {
 }
 
 .theme-light .primary-action-button {
-  background-color: #003366 !important;
+  background-color: #6495ED !important;
   color: #ffffff !important;
 }
 
 .theme-light .primary-action-button:hover {
-  background-color: #00264d !important;
+  background-color: #4f7ed4 !important;
+}
+
+.theme-light .bg-gsu-blue {
+  background-color: #6495ED !important;
 }
 
 .theme-light .map-link-button {
   background-color: #ffffff !important;
-  border-color: rgba(0, 51, 102, 0.42) !important;
-  color: #003366 !important;
+  border-color: rgba(100, 149, 237, 0.72) !important;
+  color: #315eb3 !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .theme-light .map-link-button:hover {
-  background-color: rgba(0, 51, 102, 0.08) !important;
-  border-color: rgba(0, 51, 102, 0.65) !important;
+  background-color: rgba(100, 149, 237, 0.12) !important;
+  border-color: rgba(100, 149, 237, 0.95) !important;
 }
