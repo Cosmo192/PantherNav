@@ -79,19 +79,6 @@ export type RouteOption = {
 
 export const GSU_CENTER: Coordinate = { lat: 33.7495, lng: -84.3866 };
 
-export const CAMPUS_LOCATIONS: LocationChoice[] = [
-  { label: "GSU Student Center", coordinate: { lat: 33.7527, lng: -84.3851 } },
-  { label: "University Library", coordinate: { lat: 33.753, lng: -84.3842 } },
-  { label: "25 Park Place", coordinate: { lat: 33.7556, lng: -84.3872 } },
-  { label: "Aderhold Learning Center", coordinate: { lat: 33.755, lng: -84.3886 } },
-  { label: "Petit Science Center", coordinate: { lat: 33.7521, lng: -84.3836 } },
-  { label: "Piedmont Central", coordinate: { lat: 33.7559, lng: -84.3821 } },
-  { label: "Patton Hall", coordinate: { lat: 33.7552, lng: -84.383 } },
-  { label: "Sparks Hall", coordinate: { lat: 33.7525, lng: -84.3867 } },
-  { label: "Dahlberg Hall", coordinate: { lat: 33.7538, lng: -84.3861 } },
-  { label: "GSU Sports Arena", coordinate: { lat: 33.7513, lng: -84.3869 } }
-];
-
 export function milesBetween(a: Coordinate, b: Coordinate) {
   return distance(point([a.lng, a.lat]), point([b.lng, b.lat]), { units: "miles" });
 }

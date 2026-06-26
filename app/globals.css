@@ -75,3 +75,82 @@ select {
 .gm-style .gm-ui-hover-effect span {
   background-color: #0f172a !important;
 }
+
+.theme-light {
+  color: #0f172a;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(0, 51, 102, 0.12), transparent 34rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef4fb 48%, #f8fafc 100%);
+}
+
+.theme-light nav {
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+.theme-light .bg-gsu-panel {
+  background-color: #ffffff !important;
+}
+
+.theme-light .bg-black\/35,
+.theme-light .bg-black\/24,
+.theme-light .bg-white\/5 {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-light .border-sky-300\/15,
+.theme-light .border-sky-300\/10,
+.theme-light .border-white\/10,
+.theme-light .border-sky-300\/20 {
+  border-color: rgba(0, 51, 102, 0.16) !important;
+}
+
+.theme-light aside .text-white,
+.theme-light article .text-white,
+.theme-light section h2.text-white,
+.theme-light section h3.text-white,
+.theme-light section h4.text-white {
+  color: #0f172a !important;
+}
+
+.theme-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+.theme-light .text-slate-400,
+.theme-light .text-slate-300 {
+  color: #475569 !important;
+}
+
+.theme-light input,
+.theme-light select {
+  color: #0f172a !important;
+}
+
+.theme-light input::placeholder {
+  color: #64748b !important;
+}
+
+.theme-light .shadow-glow {
+  box-shadow: 0 0 0 1px rgba(0, 51, 102, 0.12), 0 18px 42px rgba(15, 23, 42, 0.08) !important;
+}
+
+.theme-light .primary-action-button {
+  background-color: #003366 !important;
+  color: #ffffff !important;
+}
+
+.theme-light .primary-action-button:hover {
+  background-color: #00264d !important;
+}
+
+.theme-light .map-link-button {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 51, 102, 0.42) !important;
+  color: #003366 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.theme-light .map-link-button:hover {
+  background-color: rgba(0, 51, 102, 0.08) !important;
+  border-color: rgba(0, 51, 102, 0.65) !important;
+}

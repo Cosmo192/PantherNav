@@ -13,17 +13,18 @@ import {
   LocateFixed,
   Map,
   MapPin,
+  Moon,
   Navigation,
   RefreshCw,
   Search,
   Route as RouteIcon,
   Signpost,
+  Sun,
 } from "lucide-react";
 import { gsuBounds, loadGoogleMaps } from "@/lib/googleMaps";
 import {
   buildGoogleSearchLink,
   buildGoogleWalkingLink,
-  CAMPUS_LOCATIONS,
   findRankedRoutes,
   formatArrival,
   formatMiles,
@@ -53,9 +54,6 @@ const tabs: Array<{ id: TabId; label: string; icon: typeof RouteIcon }> = [
 
 function resolveChoice(value: string, stops: Stop[]): LocationChoice {
   const normalized = value.trim().toLowerCase();
-  const campus = CAMPUS_LOCATIONS.find((item) => item.label.toLowerCase() === normalized);
-  if (campus) return campus;
-
   const stop = stops.find((item) => item.name.toLowerCase() === normalized);
   if (stop) return { label: stop.name, coordinate: stopCoordinate(stop) };
 
@@ -68,8 +66,7 @@ function PlaceInput({
   value,
   onChange,
   onPlaceSelect,
-  placeholder,
-  stops
+  placeholder
 }: {
   id: string;
   label: string;
@@ -77,10 +74,8 @@ function PlaceInput({
   onChange: (value: string) => void;
   onPlaceSelect?: (choice: LocationChoice) => void;
   placeholder: string;
-  stops: Stop[];
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const options = Array.from(new Set([value, ...CAMPUS_LOCATIONS.map((item) => item.label), ...stops.slice(0, 24).map((stop) => stop.name)])).filter(Boolean);
 
   useEffect(() => {
     let autocomplete: any;
@@ -127,14 +122,8 @@ function PlaceInput({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          list={`${id}-choices`}
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
         />
-        <datalist id={`${id}-choices`}>
-          {options.map((option) => (
-            <option key={`${id}-${option}`} value={option} />
-          ))}
-        </datalist>
       </div>
     </label>
   );
@@ -233,7 +222,7 @@ function Step({
         <div className="truncate text-sm text-slate-400">{detail}</div>
       </div>
       {href && (
-        <a className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-sky-300/20 text-slate-200 hover:bg-white/10" href={href} target="_blank">
+        <a className="map-link-button grid h-9 w-9 shrink-0 place-items-center rounded-md border border-sky-300/20 text-slate-200 hover:bg-white/10" href={href} target="_blank">
           <Navigation size={16} />
         </a>
       )}
@@ -246,6 +235,8 @@ export default function PantherNavApp() {
   const [snapshot, setSnapshot] = useState<TransitSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [selectedStopId, setSelectedStopId] = useState<string>("");
@@ -268,11 +259,40 @@ export default function PantherNavApp() {
     }
   }
 
+  async function handleManualRefresh() {
+    if (refreshCooldown > 0 || loading) return;
+
+    setRefreshCooldown(10);
+    await loadTransit();
+  }
+
   useEffect(() => {
     loadTransit();
     const vehicleTimer = window.setInterval(loadTransit, 10_000);
     return () => window.clearInterval(vehicleTimer);
   }, []);
+
+  useEffect(() => {
+    if (refreshCooldown <= 0) return;
+
+    const cooldownTimer = window.setTimeout(() => {
+      setRefreshCooldown((current) => Math.max(0, current - 1));
+    }, 1_000);
+
+    return () => window.clearTimeout(cooldownTimer);
+  }, [refreshCooldown]);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("panthernav-theme");
+    if (savedTheme === "dark" || savedTheme === "light") {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("panthernav-theme", theme);
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
 
   const originChoice = useMemo(() => {
     if (origin === "Current location" && currentLocation) return currentLocation;
@@ -317,7 +337,7 @@ export default function PantherNavApp() {
   }, [selectedStop, snapshot]);
 
   return (
-    <main className="min-h-screen">
+    <main className={`min-h-screen theme-${theme}`}>
       <header className="border-b border-sky-300/15 bg-gsu-blue/95 px-4 py-4 shadow-2xl shadow-black/30">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -329,13 +349,27 @@ export default function PantherNavApp() {
               <p className="truncate text-sm text-blue-100">Georgia State campus transit</p>
             </div>
           </div>
-          <button
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/20 text-white hover:bg-white/10"
-            onClick={loadTransit}
-            title="Refresh transit data"
-          >
-            <RefreshCw className={loading ? "animate-spin" : ""} size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/20 text-white hover:bg-white/10"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/20 text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleManualRefresh}
+              disabled={refreshCooldown > 0 || loading}
+              title={refreshCooldown > 0 ? `Refresh available in ${refreshCooldown}s` : "Refresh transit data"}
+            >
+              {refreshCooldown > 0 ? (
+                <span className="text-xs font-black">{refreshCooldown}</span>
+              ) : (
+                <RefreshCw className={loading ? "animate-spin" : ""} size={18} />
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -383,7 +417,6 @@ export default function PantherNavApp() {
                   onChange={setOrigin}
                   onPlaceSelect={setCustomOrigin}
                   placeholder="Search campus"
-                  stops={snapshot?.stops ?? []}
                 />
                 <PlaceInput
                   id="destination"
@@ -392,10 +425,9 @@ export default function PantherNavApp() {
                   onChange={setDestination}
                   onPlaceSelect={setCustomDestination}
                   placeholder="Search destination"
-                  stops={snapshot?.stops ?? []}
                 />
                 <button
-                  className="flex items-center justify-center gap-2 rounded-lg bg-gsu-blue px-4 py-3 text-sm font-black text-white hover:bg-blue-900"
+                  className="primary-action-button flex items-center justify-center gap-2 rounded-lg bg-gsu-blue px-4 py-3 text-sm font-black text-white hover:bg-blue-900"
                   onClick={() => {
                     navigator.geolocation?.getCurrentPosition((position) => {
                       setOrigin("Current location");
@@ -454,7 +486,7 @@ export default function PantherNavApp() {
               </label>
               {selectedStop && (
                 <a
-                  className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-gsu-blue px-4 py-3 text-sm font-black text-white hover:bg-blue-900"
+                  className="primary-action-button mt-4 flex items-center justify-center gap-2 rounded-lg bg-gsu-blue px-4 py-3 text-sm font-black text-white hover:bg-blue-900"
                   href={buildGoogleSearchLink(selectedStop.name)}
                   target="_blank"
                 >
