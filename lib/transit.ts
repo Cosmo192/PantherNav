@@ -70,6 +70,7 @@ export type RouteOption = {
   originStop: Stop;
   destinationStop: Stop;
   activeBuses: number;
+  loadPercent: number | null;
   walkToStopMiles: number;
   walkFromStopMiles: number;
   waitMinutes: number;
@@ -154,7 +155,14 @@ export function findRankedRoutes(
 
     if (!originStop || !destinationStop || originStop.stop.id === destinationStop.stop.id) return;
 
-    const activeBuses = vehiclesForRoute(snapshot.vehicles, route).length;
+    const routeVehicles = vehiclesForRoute(snapshot.vehicles, route);
+    const activeBuses = routeVehicles.length;
+    const loadValues = routeVehicles
+      .map((vehicle) => vehicle.paxLoad)
+      .filter((load): load is number => load != null && Number.isFinite(load));
+    const loadPercent = loadValues.length
+      ? Math.round(loadValues.reduce((sum, load) => sum + load, 0) / loadValues.length)
+      : null;
     const walkToStopMinutes = minutesForWalk(originStop.distanceMiles);
     const walkFromStopMinutes = minutesForWalk(destinationStop.distanceMiles);
     const rideDistance = milesBetween(stopCoordinate(originStop.stop), stopCoordinate(destinationStop.stop));
@@ -168,6 +176,7 @@ export function findRankedRoutes(
       originStop: originStop.stop,
       destinationStop: destinationStop.stop,
       activeBuses,
+      loadPercent,
       walkToStopMiles: originStop.distanceMiles,
       walkFromStopMiles: destinationStop.distanceMiles,
       waitMinutes,

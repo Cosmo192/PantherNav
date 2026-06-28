@@ -159,7 +159,7 @@ function RouteCard({ option }: { option: RouteOption }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-xs text-slate-300">
+        <div className="grid grid-cols-4 gap-1.5 text-[11px] text-slate-300 sm:gap-2 sm:text-xs">
           <div className="rounded-md bg-white/5 p-2">
             <span className="block text-slate-500">Walk</span>
             {formatMiles(option.walkToStopMiles + option.walkFromStopMiles)}
@@ -171,6 +171,10 @@ function RouteCard({ option }: { option: RouteOption }) {
           <div className="rounded-md bg-white/5 p-2">
             <span className="block text-slate-500">Drop off</span>
             {dropoff}
+          </div>
+          <div className="rounded-md bg-white/5 p-2">
+            <span className="block text-slate-500">Load</span>
+            {option.loadPercent == null ? "--" : `${option.loadPercent}%`}
           </div>
         </div>
       </button>
