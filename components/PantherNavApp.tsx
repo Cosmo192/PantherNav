@@ -10,7 +10,6 @@ import {
   Clock3,
   Compass,
   Footprints,
-  LocateFixed,
   Map,
   MapPin,
   Moon,
@@ -28,7 +27,9 @@ import {
   findRankedRoutes,
   formatArrival,
   formatMiles,
+  GSU_BUILDINGS,
   GSU_CENTER,
+  GsuBuilding,
   LocationChoice,
   milesBetween,
   RouteOption,
@@ -76,6 +77,47 @@ function PlaceInput({
   placeholder: string;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const wrapperRef = useRef<HTMLLabelElement | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const filteredBuildings = useMemo(() => {
+    const query = value.trim().toLowerCase();
+    if (!query) return GSU_BUILDINGS;
+
+    return GSU_BUILDINGS.filter((building) => {
+      return [building.name, building.address, building.code].some((field) => field.toLowerCase().includes(query));
+    });
+  }, [value]);
+
+  function selectBuilding(building: GsuBuilding) {
+    const choice = {
+      label: building.name,
+      address: building.address,
+      coordinate: building.coordinate
+    };
+
+    onChange(building.name);
+    onPlaceSelect?.(choice);
+    setDropdownOpen(false);
+
+    loadGoogleMaps().then((ready) => {
+      const google = (window as any).google;
+      if (!ready || !google?.maps?.Geocoder) return;
+
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: building.address }, (results: any[], status: string) => {
+        const location = results?.[0]?.geometry?.location;
+        if (status !== "OK" || !location) return;
+
+        onPlaceSelect?.({
+          ...choice,
+          coordinate: {
+            lat: location.lat(),
+            lng: location.lng()
+          }
+        });
+      });
+    });
+  }
 
   useEffect(() => {
     let autocomplete: any;
@@ -97,8 +139,10 @@ function PlaceInput({
         if (!location) return;
         const label = place.name || place.formatted_address || inputRef.current?.value || "Selected location";
         onChange(label);
+        setDropdownOpen(false);
         onPlaceSelect?.({
           label,
+          address: place.formatted_address,
           coordinate: {
             lat: location.lat(),
             lng: location.lng()
@@ -112,19 +156,62 @@ function PlaceInput({
     };
   }, [onChange, onPlaceSelect]);
 
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
   return (
-    <label className="grid gap-2">
+    <label ref={wrapperRef} className="relative grid gap-2">
       <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{label}</span>
       <div className="flex items-center gap-2 rounded-lg border border-sky-300/15 bg-black/35 px-3 py-2.5 focus-within:border-sky-300/45">
         <Search size={18} className="shrink-0 text-slate-400" />
         <input
+          id={id}
           ref={inputRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setDropdownOpen(false);
+          }}
           placeholder={placeholder}
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
         />
+        <button
+          type="button"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-300 transition hover:bg-white/10 hover:text-white"
+          onClick={() => setDropdownOpen((current) => !current)}
+          aria-label={`${dropdownOpen ? "Close" : "Open"} ${label} building list`}
+          aria-expanded={dropdownOpen}
+        >
+          <ChevronDown className={`transition ${dropdownOpen ? "rotate-180" : ""}`} size={18} />
+        </button>
       </div>
+      {dropdownOpen && (
+        <div className="absolute left-0 right-0 top-full z-40 mt-2 max-h-72 overflow-y-auto rounded-lg border border-sky-300/20 bg-gsu-panel p-1 shadow-2xl shadow-black/40">
+          {filteredBuildings.length ? (
+            filteredBuildings.map((building) => (
+              <button
+                key={`${id}-${building.code}-${building.name}`}
+                type="button"
+                className="grid w-full gap-0.5 rounded-md px-3 py-2.5 text-left transition hover:bg-white/10 focus:bg-white/10 focus:outline-none"
+                onClick={() => selectBuilding(building)}
+              >
+                <span className="text-sm font-bold text-white">{building.name}</span>
+                <span className="truncate text-xs text-slate-400">{building.address}</span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-3 text-sm text-slate-400">No matching GSU buildings</div>
+          )}
+        </div>
+      )}
     </label>
   );
 }
@@ -244,7 +331,6 @@ export default function PantherNavApp() {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [selectedStopId, setSelectedStopId] = useState<string>("");
-  const [currentLocation, setCurrentLocation] = useState<LocationChoice | null>(null);
   const [customOrigin, setCustomOrigin] = useState<LocationChoice | null>(null);
   const [customDestination, setCustomDestination] = useState<LocationChoice | null>(null);
 
@@ -299,10 +385,9 @@ export default function PantherNavApp() {
   }, [theme]);
 
   const originChoice = useMemo(() => {
-    if (origin === "Current location" && currentLocation) return currentLocation;
     if (customOrigin?.label === origin) return customOrigin;
     return resolveChoice(origin, snapshot?.stops ?? []);
-  }, [currentLocation, customOrigin, origin, snapshot?.stops]);
+  }, [customOrigin, origin, snapshot?.stops]);
   const destinationChoice = useMemo(() => {
     if (customDestination?.label === destination) return customDestination;
     return resolveChoice(destination, snapshot?.stops ?? []);
@@ -430,24 +515,6 @@ export default function PantherNavApp() {
                   onPlaceSelect={setCustomDestination}
                   placeholder="Search destination"
                 />
-                <button
-                  className="primary-action-button flex items-center justify-center gap-2 rounded-lg bg-gsu-blue px-4 py-3 text-sm font-black text-white hover:bg-blue-900"
-                  onClick={() => {
-                    navigator.geolocation?.getCurrentPosition((position) => {
-                      setOrigin("Current location");
-                      setCurrentLocation({
-                        label: "Current location",
-                        coordinate: {
-                          lat: position.coords.latitude,
-                          lng: position.coords.longitude
-                        }
-                      });
-                    });
-                  }}
-                >
-                  <LocateFixed size={17} />
-                  Use current location
-                </button>
               </div>
             </aside>
 
