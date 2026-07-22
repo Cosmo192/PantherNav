@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowRight,
   Bus,
   ChevronDown,
   Clock3,
@@ -20,6 +19,7 @@ import {
   Signpost,
   Sun,
 } from "lucide-react";
+import ExploreTab, { ExplorePlace } from "@/components/ExploreTab";
 import { gsuBounds, loadGoogleMaps } from "@/lib/googleMaps";
 import {
   buildGoogleSearchLink,
@@ -45,13 +45,34 @@ const LiveTransitMap = dynamic(() => import("@/components/LiveTransitMap"), {
   loading: () => <div className="grid min-h-[460px] place-items-center rounded-lg border border-sky-300/15 bg-gsu-panel">Loading map</div>
 });
 
-type TabId = "routes" | "arrivals" | "map";
+type TabId = "routes" | "arrivals" | "map" | "explore";
 
 const tabs: Array<{ id: TabId; label: string; icon: typeof RouteIcon }> = [
   { id: "routes", label: "Route Finder", icon: RouteIcon },
   { id: "arrivals", label: "Arrivals", icon: Clock3 },
-  { id: "map", label: "Live Map", icon: Map }
+  { id: "map", label: "Live Map", icon: Map },
+  { id: "explore", label: "Explore", icon: Compass }
 ];
+
+function hidePlacesContainers() {
+  document.querySelectorAll<HTMLElement>(".pac-container").forEach((container) => {
+    container.style.display = "none";
+  });
+}
+
+function scopePlacesContainers(activeInputId: string) {
+  const containers = Array.from(document.querySelectorAll<HTMLElement>(".pac-container"));
+  const activeContainer = containers[containers.length - 1];
+
+  containers.forEach((container) => {
+    if (container === activeContainer) {
+      container.dataset.panthernavInput = activeInputId;
+      container.style.display = "";
+    } else {
+      container.style.display = "none";
+    }
+  });
+}
 
 function resolveChoice(value: string, stops: Stop[]): LocationChoice {
   const normalized = value.trim().toLowerCase();
@@ -78,15 +99,66 @@ function PlaceInput({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const wrapperRef = useRef<HTMLLabelElement | null>(null);
+  const autocompleteRef = useRef<any>(null);
+  const suppressPlacesRef = useRef(false);
+  const dropdownSelectionRef = useRef(false);
+  const dropdownSelectionTimerRef = useRef<number | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dropdownQuery, setDropdownQuery] = useState("");
   const filteredBuildings = useMemo(() => {
-    const query = value.trim().toLowerCase();
+    const query = dropdownQuery.trim().toLowerCase();
     if (!query) return GSU_BUILDINGS;
 
     return GSU_BUILDINGS.filter((building) => {
       return [building.name, building.address, building.code].some((field) => field.toLowerCase().includes(query));
     });
-  }, [value]);
+  }, [dropdownQuery]);
+
+  function hideGooglePlacesPopup(blurInput = true) {
+    suppressPlacesRef.current = true;
+    document.body.classList.add("panthernav-hide-places");
+    if (blurInput) inputRef.current?.blur();
+
+    window.setTimeout(() => {
+      hidePlacesContainers();
+    }, 0);
+  }
+
+  function allowGooglePlacesPopup() {
+    if (dropdownSelectionRef.current) {
+      hideGooglePlacesPopup(false);
+      return;
+    }
+
+    suppressPlacesRef.current = false;
+    document.body.classList.remove("panthernav-hide-places");
+
+    window.setTimeout(() => scopePlacesContainers(id), 0);
+  }
+
+  function handleInputChange(nextValue: string) {
+    if (dropdownOpen) {
+      setDropdownQuery(nextValue);
+      hideGooglePlacesPopup(false);
+    } else {
+      allowGooglePlacesPopup();
+    }
+
+    onChange(nextValue);
+  }
+
+  function toggleDropdown() {
+    setDropdownOpen((current) => {
+      const nextOpen = !current;
+
+      if (nextOpen) {
+        setDropdownQuery("");
+        hideGooglePlacesPopup();
+      }
+
+      return nextOpen;
+    });
+  }
 
   function selectBuilding(building: GsuBuilding) {
     const choice = {
@@ -95,9 +167,23 @@ function PlaceInput({
       coordinate: building.coordinate
     };
 
+    dropdownSelectionRef.current = true;
+    if (dropdownSelectionTimerRef.current) {
+      window.clearTimeout(dropdownSelectionTimerRef.current);
+    }
+
     onChange(building.name);
     onPlaceSelect?.(choice);
     setDropdownOpen(false);
+    setDropdownQuery("");
+    autocompleteRef.current?.set?.("place", null);
+    hideGooglePlacesPopup();
+    window.setTimeout(() => hideGooglePlacesPopup(false), 120);
+
+    dropdownSelectionTimerRef.current = window.setTimeout(() => {
+      dropdownSelectionRef.current = false;
+      dropdownSelectionTimerRef.current = null;
+    }, 250);
 
     loadGoogleMaps().then((ready) => {
       const google = (window as any).google;
@@ -132,14 +218,18 @@ function PlaceInput({
         bounds: gsuBounds(),
         strictBounds: false
       });
+      autocompleteRef.current = autocomplete;
 
       listener = autocomplete.addListener("place_changed", () => {
+        allowGooglePlacesPopup();
         const place = autocomplete.getPlace();
         const location = place?.geometry?.location;
         if (!location) return;
         const label = place.name || place.formatted_address || inputRef.current?.value || "Selected location";
         onChange(label);
         setDropdownOpen(false);
+        setDropdownQuery("");
+        hideGooglePlacesPopup();
         onPlaceSelect?.({
           label,
           address: place.formatted_address,
@@ -153,6 +243,10 @@ function PlaceInput({
 
     return () => {
       listener?.remove?.();
+      autocompleteRef.current = null;
+      if (dropdownSelectionTimerRef.current) {
+        window.clearTimeout(dropdownSelectionTimerRef.current);
+      }
     };
   }, [onChange, onPlaceSelect]);
 
@@ -160,11 +254,15 @@ function PlaceInput({
     function handlePointerDown(event: MouseEvent) {
       if (!wrapperRef.current?.contains(event.target as Node)) {
         setDropdownOpen(false);
+        setDropdownQuery("");
       }
     }
 
     document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      hideGooglePlacesPopup();
+    };
   }, []);
 
   return (
@@ -176,9 +274,21 @@ function PlaceInput({
           id={id}
           ref={inputRef}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => {
+            if (!dropdownOpen) allowGooglePlacesPopup();
+          }}
+          onBlur={() => {
+            window.setTimeout(() => {
+              if (document.activeElement !== inputRef.current) hideGooglePlacesPopup(false);
+            }, 150);
+          }}
+          onChange={(event) => handleInputChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Escape") setDropdownOpen(false);
+            if (event.key === "Escape") {
+              setDropdownOpen(false);
+              setDropdownQuery("");
+              hideGooglePlacesPopup();
+            }
           }}
           placeholder={placeholder}
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
@@ -186,7 +296,7 @@ function PlaceInput({
         <button
           type="button"
           className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-300 transition hover:bg-white/10 hover:text-white"
-          onClick={() => setDropdownOpen((current) => !current)}
+          onClick={toggleDropdown}
           aria-label={`${dropdownOpen ? "Close" : "Open"} ${label} building list`}
           aria-expanded={dropdownOpen}
         >
@@ -356,6 +466,12 @@ export default function PantherNavApp() {
     await loadTransit();
   }
 
+  function handleExploreDirections(place: ExplorePlace, destinationChoice: LocationChoice) {
+    setDestination(place.name);
+    setCustomDestination(destinationChoice);
+    setActiveTab("routes");
+  }
+
   useEffect(() => {
     loadTransit();
     const vehicleTimer = window.setInterval(loadTransit, 10_000);
@@ -383,6 +499,21 @@ export default function PantherNavApp() {
     window.localStorage.setItem("panthernav-theme", theme);
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    const routeFinderActive = activeTab === "routes";
+    document.body.classList.toggle("panthernav-route-finder-active", routeFinderActive);
+
+    if (!routeFinderActive) {
+      document.body.classList.add("panthernav-hide-places");
+      hidePlacesContainers();
+    }
+
+    return () => {
+      document.body.classList.remove("panthernav-route-finder-active");
+      document.body.classList.remove("panthernav-hide-places");
+    };
+  }, [activeTab]);
 
   const originChoice = useMemo(() => {
     if (customOrigin?.label === origin) return customOrigin;
@@ -463,7 +594,7 @@ export default function PantherNavApp() {
       </header>
 
       <nav className="sticky top-0 z-20 border-b border-sky-300/10 bg-black/80 px-4 py-3 backdrop-blur">
-        <div className="mx-auto grid max-w-6xl grid-cols-3 gap-2">
+        <div className="mx-auto grid max-w-6xl grid-cols-4 gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -675,6 +806,8 @@ export default function PantherNavApp() {
             </div>
           </div>
         )}
+
+        {activeTab === "explore" && <ExploreTab onGetDirections={handleExploreDirections} />}
 
         {snapshot?.alerts?.length ? (
           <div className="rounded-lg border border-gsu-red/35 bg-gsu-red/10 p-4">

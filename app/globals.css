@@ -76,6 +76,11 @@ select {
   background-color: #0f172a !important;
 }
 
+.panthernav-hide-places .pac-container,
+body:not(.panthernav-route-finder-active) .pac-container {
+  display: none !important;
+}
+
 .theme-light {
   color: #0f172a;
   background:
@@ -106,6 +111,7 @@ select {
 
 .theme-light aside .text-white,
 .theme-light article .text-white,
+.theme-light [role="dialog"] .text-white,
 .theme-light section h2.text-white,
 .theme-light section h3.text-white,
 .theme-light section h4.text-white {
