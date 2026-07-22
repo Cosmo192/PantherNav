@@ -315,23 +315,6 @@ function PlaceDetailsModal({
   onClose: () => void;
   onGetDirections: () => void;
 }) {
-  const touchStartYRef = useRef<number | null>(null);
-
-  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
-    touchStartYRef.current = event.targetTouches[0]?.clientY ?? null;
-  }
-
-  function handleTouchEnd(event: React.TouchEvent<HTMLDivElement>) {
-    if (touchStartYRef.current == null) return;
-
-    const touchEndY = event.changedTouches[0]?.clientY ?? touchStartYRef.current;
-    if (touchEndY - touchStartYRef.current > 50) {
-      onClose();
-    }
-
-    touchStartYRef.current = null;
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-0 backdrop-blur sm:place-items-center sm:p-4"
@@ -342,8 +325,6 @@ function PlaceDetailsModal({
       <div
         className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-lg border border-sky-300/15 bg-gsu-panel shadow-2xl shadow-black/50 sm:max-h-[84vh] sm:rounded-lg"
         onClick={(event) => event.stopPropagation()}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-sky-300/15 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
           <button
@@ -447,10 +428,6 @@ function PlaceDetailsModal({
           <button className="flex min-h-11 items-center justify-center rounded-lg border border-sky-300/25 px-4 py-3 text-sm font-black text-slate-300 hover:bg-white/10 active:scale-[0.99]" onClick={onClose}>
             Done
           </button>
-        </div>
-
-        <div className="pointer-events-none absolute bottom-[calc(7.5rem+env(safe-area-inset-bottom))] left-1/2 block -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-xs text-white/60 sm:hidden">
-          Swipe down to close
         </div>
       </div>
     </div>
