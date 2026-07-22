@@ -11,6 +11,7 @@ import {
   Music,
   Palette,
   Phone,
+  RefreshCw,
   ShoppingBag,
   Sparkles,
   Star,
@@ -161,12 +162,13 @@ export default function ExploreTab({ onGetDirections }: { onGetDirections: (plac
           <p className="text-sm text-slate-400">Find nearby places, then send one straight to Route Finder.</p>
         </div>
         <button
-          className="flex items-center gap-2 rounded-lg border border-sky-300/15 bg-gsu-panel px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-sky-300/15 bg-gsu-panel text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => loadPlaces(selectedCategory, true)}
           disabled={loading}
+          aria-label="Refresh places"
+          title="Refresh places"
         >
-          <Loader2 className={loading ? "animate-spin" : ""} size={16} />
-          Refresh
+          <RefreshCw className={loading ? "animate-spin" : ""} size={18} />
         </button>
       </div>
 
@@ -244,8 +246,19 @@ function PlaceCard({
   onGetDirections: (place: ExplorePlace) => void;
 }) {
   return (
-    <article className="group overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow transition hover:-translate-y-0.5 hover:border-gsu-red/45">
-      <button className="grid w-full text-left" onClick={() => onOpen(place)}>
+    <article
+      className="group cursor-pointer overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow transition hover:-translate-y-0.5 hover:border-gsu-red/45"
+      onClick={() => onOpen(place)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(place);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="grid w-full text-left">
         <div className="relative aspect-[16/10] overflow-hidden bg-black/35">
           {place.photoUrl ? (
             <img
@@ -286,7 +299,7 @@ function PlaceCard({
             </button>
           </div>
         </div>
-      </button>
+      </div>
     </article>
   );
 }
@@ -302,88 +315,142 @@ function PlaceDetailsModal({
   onClose: () => void;
   onGetDirections: () => void;
 }) {
+  const touchStartYRef = useRef<number | null>(null);
+
+  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+    touchStartYRef.current = event.targetTouches[0]?.clientY ?? null;
+  }
+
+  function handleTouchEnd(event: React.TouchEvent<HTMLDivElement>) {
+    if (touchStartYRef.current == null) return;
+
+    const touchEndY = event.changedTouches[0]?.clientY ?? touchStartYRef.current;
+    if (touchEndY - touchStartYRef.current > 50) {
+      onClose();
+    }
+
+    touchStartYRef.current = null;
+  }
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-0 backdrop-blur sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-lg border border-sky-300/15 bg-gsu-panel shadow-2xl shadow-black/50 sm:rounded-lg">
-        <div className="relative aspect-[16/9] bg-black/35">
-          {place.photoUrl ? (
-            <img src={place.photoUrl} alt={place.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full place-items-center bg-gsu-blue/25 text-slate-300">
-              <MapPin size={34} />
-            </div>
-          )}
-          <button className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg bg-black/70 text-white hover:bg-black" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-0 backdrop-blur sm:place-items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-lg border border-sky-300/15 bg-gsu-panel shadow-2xl shadow-black/50 sm:max-h-[84vh] sm:rounded-lg"
+        onClick={(event) => event.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="flex shrink-0 items-center gap-3 border-b border-sky-300/15 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
+          <button
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-gsu-red/35 text-gsu-red transition hover:bg-gsu-red/10 active:scale-95"
+            onClick={onClose}
+            aria-label="Close place details"
+            title="Close"
+          >
             <X size={18} />
           </button>
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-black text-white">{place.name}</h3>
+            <p className="truncate text-sm text-slate-400">{place.address || "Address unavailable"}</p>
+          </div>
         </div>
 
-        <div className="grid gap-4 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-xl font-black text-white">{place.name}</h3>
-              <p className="mt-1 text-sm text-slate-400">{place.address || "Address unavailable"}</p>
-            </div>
-            <span className="rounded-md bg-white/5 px-2 py-1 text-xs font-bold text-slate-300">{placeTypeLabel(place.types)}</span>
-          </div>
-
-          <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
-            <div className="rounded-md bg-white/5 p-3">
-              <span className="block text-xs text-slate-500">Rating</span>
+        <div className="flex-1 overflow-y-auto p-4 [-webkit-overflow-scrolling:touch] sm:p-5">
+          <div className="relative mb-4 aspect-[16/9] overflow-hidden rounded-lg bg-black/35">
+            {place.photoUrl ? (
+              <img src={place.photoUrl} alt={place.name} className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full place-items-center bg-gsu-blue/25 text-slate-300">
+                <MapPin size={34} />
+              </div>
+            )}
+            <div className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-black/70 px-3 py-2 text-sm font-bold text-white backdrop-blur">
+              <Star className="fill-gsu-red text-gsu-red" size={14} />
               {ratingLabel(place)}
             </div>
-            <div className="rounded-md bg-white/5 p-3">
-              <span className="block text-xs text-slate-500">Distance</span>
-              {formatMiles(placeDistance(place))} from GSU
-            </div>
-            <div className="rounded-md bg-white/5 p-3">
-              <span className="block text-xs text-slate-500">Hours</span>
-              {place.openNow == null ? "Not listed" : place.openNow ? "Open now" : "Closed now"}
-            </div>
           </div>
 
-          {loading && (
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <Loader2 className="animate-spin" size={16} />
-              Loading details...
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-xl font-black text-white">{place.name}</h3>
+                <p className="mt-1 text-sm text-slate-400">{place.address || "Address unavailable"}</p>
+              </div>
+              <span className="rounded-md bg-white/5 px-2 py-1 text-xs font-bold text-slate-300">{placeTypeLabel(place.types)}</span>
             </div>
-          )}
 
-          {(place.phone || place.website || place.mapsUrl) && (
-            <div className="flex flex-wrap gap-2">
-              {place.phone && (
-                <a className="flex items-center gap-2 rounded-lg border border-sky-300/15 px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10" href={`tel:${place.phone}`}>
-                  <Phone size={15} />
-                  Call
-                </a>
-              )}
-              {place.website && (
-                <a className="flex items-center gap-2 rounded-lg border border-sky-300/15 px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10" href={place.website} target="_blank">
-                  <Globe size={15} />
-                  Website
-                </a>
-              )}
-              {place.mapsUrl && (
-                <a className="flex items-center gap-2 rounded-lg border border-sky-300/15 px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10" href={place.mapsUrl} target="_blank">
-                  <MapPin size={15} />
-                  Map
-                </a>
-              )}
+            <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
+              <div className="rounded-md bg-white/5 p-3">
+                <span className="block text-xs text-slate-500">Rating</span>
+                {ratingLabel(place)}
+              </div>
+              <div className="rounded-md bg-white/5 p-3">
+                <span className="block text-xs text-slate-500">Distance</span>
+                {formatMiles(placeDistance(place))} from GSU
+              </div>
+              <div className="rounded-md bg-white/5 p-3">
+                <span className="block text-xs text-slate-500">Hours</span>
+                {place.openNow == null ? "Not listed" : place.openNow ? "Open now" : "Closed now"}
+              </div>
             </div>
-          )}
 
-          {place.weekdayText && place.weekdayText.length > 0 && (
-            <div className="rounded-lg bg-black/24 p-3 text-sm text-slate-300">
-              {place.weekdayText.map((line) => (
-                <div key={line}>{line}</div>
-              ))}
-            </div>
-          )}
+            {loading && (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="animate-spin" size={16} />
+                Loading details...
+              </div>
+            )}
 
-          <button className="flex items-center justify-center gap-2 rounded-lg bg-gsu-red px-4 py-3 text-sm font-black text-white hover:bg-red-700" onClick={onGetDirections}>
+            {(place.phone || place.website || place.mapsUrl) && (
+              <div className="flex flex-wrap gap-2">
+                {place.phone && (
+                  <a className="flex min-h-11 items-center gap-2 rounded-lg border border-sky-300/15 px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10" href={`tel:${place.phone}`}>
+                    <Phone size={15} />
+                    Call
+                  </a>
+                )}
+                {place.website && (
+                  <a className="flex min-h-11 items-center gap-2 rounded-lg border border-sky-300/15 px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10" href={place.website} target="_blank">
+                    <Globe size={15} />
+                    Website
+                  </a>
+                )}
+                {place.mapsUrl && (
+                  <a className="flex min-h-11 items-center gap-2 rounded-lg border border-sky-300/15 px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10" href={place.mapsUrl} target="_blank">
+                    <MapPin size={15} />
+                    Map
+                  </a>
+                )}
+              </div>
+            )}
+
+            {place.weekdayText && place.weekdayText.length > 0 && (
+              <div className="rounded-lg bg-black/24 p-3 text-sm text-slate-300">
+                {place.weekdayText.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid shrink-0 gap-2 border-t border-sky-300/15 bg-black/24 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5">
+          <button className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-gsu-red px-4 py-3 text-sm font-black text-white hover:bg-red-700 active:scale-[0.99]" onClick={onGetDirections}>
             Get Directions
             <ExternalLink size={16} />
           </button>
+          <button className="flex min-h-11 items-center justify-center rounded-lg border border-sky-300/25 px-4 py-3 text-sm font-black text-slate-300 hover:bg-white/10 active:scale-[0.99]" onClick={onClose}>
+            Done
+          </button>
+        </div>
+
+        <div className="pointer-events-none absolute bottom-[calc(7.5rem+env(safe-area-inset-bottom))] left-1/2 block -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-xs text-white/60 sm:hidden">
+          Swipe down to close
         </div>
       </div>
     </div>
