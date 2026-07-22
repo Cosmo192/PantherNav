@@ -12,6 +12,7 @@ import {
   Palette,
   Phone,
   RefreshCw,
+  Search,
   ShoppingBag,
   Sparkles,
   Star,
@@ -19,6 +20,7 @@ import {
   Utensils,
   X
 } from "lucide-react";
+import { loadGoogleMaps } from "@/lib/googleMaps";
 import { formatMiles, GSU_CENTER, LocationChoice, milesBetween } from "@/lib/transit";
 
 const categories = [
@@ -85,12 +87,15 @@ function toLocationChoice(place: ExplorePlace): LocationChoice {
 
 export default function ExploreTab({ onGetDirections }: { onGetDirections: (place: ExplorePlace, destination: LocationChoice) => void }) {
   const cacheRef = useRef<Record<string, CacheEntry>>({});
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const autocompleteRef = useRef<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>("food");
   const [places, setPlaces] = useState<ExplorePlace[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<ExplorePlace | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const category = categories.find((item) => item.id === selectedCategory) ?? categories[0];
 
   async function loadPlaces(categoryId: CategoryId, force = false) {
@@ -146,33 +151,101 @@ export default function ExploreTab({ onGetDirections }: { onGetDirections: (plac
     onGetDirections(place, toLocationChoice(place));
   }
 
+  async function openSearchPlace(place: ExplorePlace) {
+    setSearchQuery(place.name);
+    await openPlace(place);
+  }
+
   useEffect(() => {
     loadPlaces(selectedCategory);
   }, [selectedCategory]);
 
+  useEffect(() => {
+    let listener: any;
+
+    loadGoogleMaps().then((ready) => {
+      const google = (window as any).google;
+      if (!ready || !searchInputRef.current || !google?.maps?.places) return;
+
+      const atlantaBounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(33.65, -84.55),
+        new google.maps.LatLng(33.9, -84.2)
+      );
+
+      autocompleteRef.current = new google.maps.places.Autocomplete(searchInputRef.current, {
+        bounds: atlantaBounds,
+        componentRestrictions: { country: "us" },
+        fields: ["place_id", "name", "formatted_address", "geometry", "types"],
+        strictBounds: false
+      });
+
+      listener = autocompleteRef.current.addListener("place_changed", () => {
+        const selected = autocompleteRef.current?.getPlace();
+        const location = selected?.geometry?.location;
+        if (!selected?.place_id || !location) return;
+
+        openSearchPlace({
+          id: selected.place_id,
+          name: selected.name || selected.formatted_address || "Selected place",
+          rating: null,
+          reviews: null,
+          address: selected.formatted_address || "",
+          lat: location.lat(),
+          lng: location.lng(),
+          types: selected.types ?? [],
+          photoUrl: null
+        });
+      });
+    });
+
+    return () => {
+      listener?.remove?.();
+      autocompleteRef.current = null;
+    };
+  }, []);
+
   const sortedPlaces = useMemo(() => {
-    return [...places].sort((a, b) => placeDistance(a) - placeDistance(b));
-  }, [places]);
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = query
+      ? places.filter((place) => [place.name, place.address, placeTypeLabel(place.types)].some((field) => field.toLowerCase().includes(query)))
+      : places;
+
+    return [...filtered].sort((a, b) => placeDistance(a) - placeDistance(b));
+  }, [places, searchQuery]);
 
   return (
     <div className="grid gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-black text-white">Explore Atlanta</h2>
-          <p className="text-sm text-slate-400">Find nearby places, then send one straight to Route Finder.</p>
+      <div className="grid gap-4 rounded-lg border border-sky-300/15 bg-gsu-panel p-4 shadow-glow">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gsu-red">Discover</p>
+            <h2 className="mt-1 text-2xl font-black text-white">Explore Atlanta</h2>
+            <p className="mt-1 text-sm text-slate-400">Browse places near GSU and send one straight to Navigate.</p>
+          </div>
+          <button
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-sky-300/15 bg-black/24 text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => loadPlaces(selectedCategory, true)}
+            disabled={loading}
+            aria-label="Refresh places"
+            title="Refresh places"
+          >
+            <RefreshCw className={loading ? "animate-spin" : ""} size={18} />
+          </button>
         </div>
-        <button
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-sky-300/15 bg-gsu-panel text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => loadPlaces(selectedCategory, true)}
-          disabled={loading}
-          aria-label="Refresh places"
-          title="Refresh places"
-        >
-          <RefreshCw className={loading ? "animate-spin" : ""} size={18} />
-        </button>
+
+        <label className="flex items-center gap-2 rounded-lg border border-sky-300/15 bg-black/35 px-3 py-3 focus-within:border-sky-300/45">
+          <Search size={18} className="shrink-0 text-slate-400" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search restaurants, parks, museums..."
+            className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+          />
+        </label>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto border-b border-sky-300/10 pb-1">
         {categories.map((item) => {
           const Icon = item.icon;
           const active = selectedCategory === item.id;
@@ -180,8 +253,8 @@ export default function ExploreTab({ onGetDirections }: { onGetDirections: (plac
           return (
             <button
               key={item.id}
-              className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition ${
-                active ? "border-gsu-red bg-gsu-red text-white" : "border-sky-300/15 bg-gsu-panel text-slate-300 hover:bg-white/10"
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm font-bold transition ${
+                active ? "border-gsu-red text-white" : "border-transparent text-slate-400 hover:text-white"
               }`}
               onClick={() => setSelectedCategory(item.id)}
             >
@@ -217,7 +290,7 @@ export default function ExploreTab({ onGetDirections }: { onGetDirections: (plac
       )}
 
       {!loading && !error && sortedPlaces.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
           {sortedPlaces.map((place) => (
             <PlaceCard key={place.id} place={place} onOpen={openPlace} onGetDirections={handleDirections} />
           ))}

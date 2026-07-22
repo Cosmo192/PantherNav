@@ -9,9 +9,10 @@ type LiveTransitMapProps = {
   snapshot: TransitSnapshot | null;
   selectedRouteId?: string;
   onStopSelect: (stop: Stop) => void;
+  theme?: "light" | "dark";
 };
 
-const mapStyles = [
+const darkMapStyles = [
   { elementType: "geometry", stylers: [{ color: "#111827" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#dbeafe" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#020617" }] },
@@ -26,6 +27,21 @@ const mapStyles = [
   { featureType: "transit", elementType: "geometry", stylers: [{ color: "#1d4ed8" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#061426" }] },
   { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#7dd3fc" }] }
+];
+
+const lightMapStyles = [
+  { elementType: "geometry", stylers: [{ color: "#fff8f3" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#2d2d2d" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#fffaf6" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#f5f1ed" }] },
+  { featureType: "poi.school", elementType: "geometry", stylers: [{ color: "#eaf1ff" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#eadfd6" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#6b6b6b" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f0e7df" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#6495ed" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#dfeaff" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#5a7fd4" }] }
 ];
 
 function routeColor(color?: string) {
@@ -72,7 +88,29 @@ function makeInfoContent(title: string, lines: string[], buttonText?: string) {
   return wrapper;
 }
 
-export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect }: LiveTransitMapProps) {
+function hasValidCoordinate(item: { latitude?: number; longitude?: number }) {
+  return (
+    typeof item.latitude === "number" &&
+    typeof item.longitude === "number" &&
+    Number.isFinite(item.latitude) &&
+    Number.isFinite(item.longitude) &&
+    Math.abs(item.latitude) <= 90 &&
+    Math.abs(item.longitude) <= 180
+  );
+}
+
+function logMapInitializationError(error: unknown) {
+  console.error("Map initialization error:", error);
+
+  if (error instanceof Error) {
+    console.error("Error details:", error.message, error.stack);
+    return;
+  }
+
+  console.error("Error details:", String(error), undefined);
+}
+
+export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect, theme = "light" }: LiveTransitMapProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRefs = useRef<any[]>([]);
@@ -85,14 +123,18 @@ export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect
   );
 
   const stops = useMemo(
-    () => (selectedRoute ? snapshot?.stops.filter((stop) => stopServesRoute(stop, selectedRoute)) ?? [] : snapshot?.stops ?? []),
+    () => (selectedRoute ? snapshot?.stops.filter((stop) => stopServesRoute(stop, selectedRoute)) ?? [] : snapshot?.stops ?? []).filter(hasValidCoordinate),
     [selectedRoute, snapshot?.stops]
   );
 
   const vehicles = useMemo(
-    () => (selectedRouteId ? snapshot?.vehicles.filter((vehicle) => vehicle.routeId === selectedRouteId) ?? [] : snapshot?.vehicles ?? []),
+    () => (selectedRouteId ? snapshot?.vehicles.filter((vehicle) => vehicle.routeId === selectedRouteId) ?? [] : snapshot?.vehicles ?? []).filter(hasValidCoordinate),
     [selectedRouteId, snapshot?.vehicles]
   );
+
+  useEffect(() => {
+    console.log("GoogleMap component mounted");
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -100,41 +142,90 @@ export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect
     loadGoogleMaps().then((ready) => {
       if (!mounted) return;
 
-      if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
-        setLoadState("missing-key");
-        return;
-      }
+      try {
+        if (typeof window.google !== "undefined" && window.google?.maps) {
+          console.log("Google Maps API loaded successfully");
+        } else {
+          console.error("Google Maps API NOT loaded!");
+        }
 
-      if (!ready || !window.google?.maps || !mapNodeRef.current) {
-        setLoadState("error");
-        return;
-      }
+        console.log("Map container element:", mapNodeRef.current);
+        console.log("Map container size:", mapNodeRef.current?.offsetWidth, mapNodeRef.current?.offsetHeight);
 
-      if (!mapRef.current) {
-        mapRef.current = new window.google.maps.Map(mapNodeRef.current, {
-          center: GSU_CENTER,
-          zoom: 15,
-          clickableIcons: true,
-          disableDefaultUI: false,
-          fullscreenControl: false,
-          mapTypeControl: false,
-          streetViewControl: false,
-          styles: mapStyles
+        if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+          setLoadState("missing-key");
+          return;
+        }
+
+        if (!ready || !window.google?.maps || !mapNodeRef.current) {
+          setLoadState("error");
+          return;
+        }
+
+        if (!mapRef.current) {
+          console.log("Initializing Google Map at:", GSU_CENTER);
+          mapRef.current = new window.google.maps.Map(mapNodeRef.current, {
+            center: GSU_CENTER,
+            zoom: 15,
+            clickableIcons: true,
+            disableDefaultUI: false,
+            fullscreenControl: false,
+            mapTypeControl: false,
+            streetViewControl: false,
+            styles: theme === "dark" ? darkMapStyles : lightMapStyles
+          });
+          infoWindowRef.current = new window.google.maps.InfoWindow();
+          console.log("Google Map initialized successfully");
+        }
+
+        setLoadState("ready");
+        window.requestAnimationFrame(() => {
+          if (!mapRef.current) return;
+          window.google.maps.event.trigger(mapRef.current, "resize");
+          mapRef.current.setCenter(GSU_CENTER);
         });
-        infoWindowRef.current = new window.google.maps.InfoWindow();
+      } catch (error) {
+        logMapInitializationError(error);
+        setLoadState("error");
       }
-
-      setLoadState("ready");
     });
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [snapshot?.stops.length, snapshot?.vehicles.length, theme]);
 
   useEffect(() => {
     const google = window.google;
     if (loadState !== "ready" || !google?.maps || !mapRef.current) return;
+
+    mapRef.current.setOptions({ styles: theme === "dark" ? darkMapStyles : lightMapStyles });
+    google.maps.event.trigger(mapRef.current, "resize");
+  }, [loadState, theme]);
+
+  useEffect(() => {
+    const google = window.google;
+    if (loadState !== "ready" || !google?.maps || !mapRef.current) return;
+
+    function handleResize() {
+      google.maps.event.trigger(mapRef.current, "resize");
+    }
+
+    window.addEventListener("resize", handleResize);
+    window.requestAnimationFrame(handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [loadState]);
+
+  useEffect(() => {
+    const google = window.google;
+    if (loadState !== "ready" || !google?.maps || !mapRef.current) return;
+
+    console.log("Buses to add to map:", vehicles);
+    console.log("Number of buses:", vehicles.length);
+    vehicles.forEach((bus) => {
+      console.log(`Bus ${bus.id}: lat=${bus.latitude}, lng=${bus.longitude}`);
+    });
+    console.log("PantherNav map marker update", { stops: stops.length, buses: vehicles.length });
 
     markerRefs.current.forEach((marker) => marker.setMap(null));
     markerRefs.current = [];
@@ -202,6 +293,12 @@ export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect
       markerRefs.current.push(marker);
     });
 
+    const bounds = new google.maps.LatLngBounds();
+    [...stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude })), ...vehicles.map((vehicle) => ({ lat: vehicle.latitude, lng: vehicle.longitude })), GSU_CENTER].forEach((position) => {
+      bounds.extend(position);
+    });
+    mapRef.current.fitBounds(bounds, 56);
+
     return () => {
       markerRefs.current.forEach((marker) => marker.setMap(null));
       markerRefs.current = [];
@@ -209,8 +306,8 @@ export default function LiveTransitMap({ snapshot, selectedRouteId, onStopSelect
   }, [loadState, onStopSelect, stops, vehicles]);
 
   return (
-    <div className="relative h-full min-h-[460px] overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow">
-      <div ref={mapNodeRef} className="google-map h-full min-h-[460px]" />
+    <div className="google-map-container relative h-full overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow">
+      <div ref={mapNodeRef} className="google-map h-full" />
 
       {loadState !== "ready" && (
         <div className="absolute inset-0 grid place-items-center bg-gsu-panel px-6 text-center text-sm text-slate-300">

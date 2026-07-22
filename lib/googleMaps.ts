@@ -23,7 +23,7 @@ export function loadGoogleMaps() {
     }
 
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,geometry,drawing`;
     script.async = true;
     script.defer = true;
     script.dataset.panthernavGoogle = "true";
