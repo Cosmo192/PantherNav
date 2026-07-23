@@ -659,74 +659,72 @@ export default function PantherNavApp() {
         {activeTab === "explore" && <ExploreTab onGetDirections={handleExploreDirections} />}
 
         {activeTab === "navigate" && (
-          <div className={`grid gap-4 ${isDesktop ? "xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
-            <div className="grid gap-4">
-              <div className="rounded-lg border border-sky-300/15 bg-gsu-panel/95 p-4 shadow-glow backdrop-blur">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-black text-white">Navigate</h2>
-                    <p className="text-sm text-slate-400">Search, watch live buses, and compare routes in one place.</p>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-                  <PlaceInput
-                    id="origin"
-                    label="From"
-                    value={origin}
-                    onChange={setOrigin}
-                    onPlaceSelect={setCustomOrigin}
-                    placeholder="Search campus or choose a building"
-                  />
-                  <button
-                    className="location-swap justify-self-center sm:self-end"
-                    onClick={() => {
-                      setOrigin(destination);
-                      setDestination(origin);
-                      setCustomOrigin(customDestination);
-                      setCustomDestination(customOrigin);
-                    }}
-                    title="Swap origin and destination"
-                    aria-label="Swap from and to locations"
-                  >
-                    <ArrowUpDown size={16} />
-                  </button>
-                  <PlaceInput
-                    id="destination"
-                    label="To"
-                    value={destination}
-                    onChange={setDestination}
-                    onPlaceSelect={setCustomDestination}
-                    placeholder="Search destination"
-                  />
+          <div className={`navigate-layout grid gap-4 ${isDesktop ? "xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
+            <div className="navigate-search-panel rounded-lg border border-sky-300/15 bg-gsu-panel/95 p-4 shadow-glow backdrop-blur">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-white">Navigate</h2>
+                  <p className="text-sm text-slate-400">Search, watch live buses, and compare routes in one place.</p>
                 </div>
               </div>
-
-              <div className="live-map-shell flex h-[72vh] min-h-[520px] flex-col overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-300/10 px-4 py-3">
-                  <div>
-                    <h3 className="text-base font-black text-white">Live Map</h3>
-                    <p className="text-sm text-slate-400">
-                      {snapshot?.vehicles.length ?? 0} buses and {snapshot?.stops.length ?? 0} stops
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-300">
-                    <MapPin size={16} className="text-gsu-red" />
-                    GSU system 480
-                  </div>
-                </div>
-                <div className="live-map-frame min-h-0 flex-1">
-                  <LiveTransitMap
-                    snapshot={snapshot}
-                    theme={theme}
-                    onStopSelect={(stop) => {
-                      setSelectedStopId(stop.id);
-                    }}
-                  />
-                </div>
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+                <PlaceInput
+                  id="origin"
+                  label="From"
+                  value={origin}
+                  onChange={setOrigin}
+                  onPlaceSelect={setCustomOrigin}
+                  placeholder="Search campus or choose a building"
+                />
+                <button
+                  className="location-swap justify-self-center sm:self-end"
+                  onClick={() => {
+                    setOrigin(destination);
+                    setDestination(origin);
+                    setCustomOrigin(customDestination);
+                    setCustomDestination(customOrigin);
+                  }}
+                  title="Swap origin and destination"
+                  aria-label="Swap from and to locations"
+                >
+                  <ArrowUpDown size={16} />
+                </button>
+                <PlaceInput
+                  id="destination"
+                  label="To"
+                  value={destination}
+                  onChange={setDestination}
+                  onPlaceSelect={setCustomDestination}
+                  placeholder="Search destination"
+                />
               </div>
             </div>
 
-            <aside className="grid gap-4 xl:sticky xl:top-24 xl:self-start">
+            <div className="navigate-map-panel live-map-shell flex h-[72vh] min-h-[520px] flex-col overflow-hidden rounded-lg border border-sky-300/15 bg-gsu-panel shadow-glow">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-300/10 px-4 py-3">
+                <div>
+                  <h3 className="text-base font-black text-white">Live Map</h3>
+                  <p className="text-sm text-slate-400">
+                    {snapshot?.vehicles.length ?? 0} buses and {snapshot?.stops.length ?? 0} stops
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-300">
+                  <MapPin size={16} className="text-gsu-red" />
+                  GSU system 480
+                </div>
+              </div>
+              <div className="live-map-frame min-h-0 flex-1">
+                <LiveTransitMap
+                  snapshot={snapshot}
+                  theme={theme}
+                  onStopSelect={(stop) => {
+                    setSelectedStopId(stop.id);
+                  }}
+                />
+              </div>
+            </div>
+
+            <aside className="navigate-directions-panel grid gap-4 xl:sticky xl:top-24 xl:self-start">
               <section className="rounded-t-2xl border border-sky-300/15 bg-gsu-panel p-4 shadow-glow sm:rounded-lg">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>

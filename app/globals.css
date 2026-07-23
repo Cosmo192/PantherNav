@@ -463,6 +463,18 @@ body:not(.panthernav-places-active) .pac-container {
   transform: scale(0.95);
 }
 
+.navigate-search-panel {
+  order: 1;
+}
+
+.navigate-directions-panel {
+  order: 2;
+}
+
+.navigate-map-panel {
+  order: 3;
+}
+
 .google-map-container {
   background: var(--bg-secondary);
   border-radius: 8px;
@@ -495,6 +507,26 @@ body:not(.panthernav-places-active) .pac-container {
 
 .gm-style .gm-ui-hover-effect {
   opacity: 1 !important;
+}
+
+@media (min-width: 1280px) {
+  .navigate-search-panel {
+    grid-column: 1;
+    grid-row: 1;
+    order: 0;
+  }
+
+  .navigate-map-panel {
+    grid-column: 1;
+    grid-row: 2;
+    order: 0;
+  }
+
+  .navigate-directions-panel {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    order: 0;
+  }
 }
 
 @media (max-width: 767px) {
